@@ -1,111 +1,106 @@
 import streamlit as st
 import pandas as pd
-from pycaret.classification import *
-from pycaret.regression import *
-import pandas_profiling
-from streamlit_pandas_profiling import st_profile_report
 
+# Function to automate data preprocessing
+def automate_preprocessing(data):
+    # Automatically detect column types
+    categorical_cols = data.select_dtypes(include=['object']).columns
+    numerical_cols = data.select_dtypes(exclude=['object']).columns
 
-# Title and description
-st.title("Auto Machine Learning Web App")
-st.write("This is an automated app to train and evaluate machine learning models.")
+    # Automatically detect null values
+    null_values = data.isnull().sum()
 
-# Sidebar for user input
-st.sidebar.header("Upload Data")
-uploaded_file = st.sidebar.file_uploader("Upload a CSV file:", type=["csv"])
+    return categorical_cols, numerical_cols, null_values
+
+# Function to handle missing values and data transformation
+def handle_missing_and_transform(data, categorical_cols, numerical_cols):
+    st.subheader("Handling Missing Values")
+    for col in data.columns:
+        if data[col].isna().any():
+            st.subheader(f"Handling missing values for column '{col}'")
+            if col in categorical_cols:
+                technique = st.radio(f"What do you want to do with '{col}'?", ('Most Frequent', 'Additional Class'))
+                if technique == 'Most Frequent':
+                    most_frequent = data[col].mode()[0]
+                    data[col].fillna(most_frequent, inplace=True)
+                elif technique == 'Additional Class':
+                    data[col].fillna('Missing', inplace=True)
+            elif col in numerical_cols:
+                technique = st.radio(f"What do you want to do with '{col}'?", ('Mean', 'Median', 'Mode'))
+                if technique == 'Mean':
+                    mean_value = data[col].mean()
+                    data[col].fillna(mean_value, inplace=True)
+                elif technique == 'Median':
+                    median_value = data[col].median()
+                    data[col].fillna(median_value, inplace=True)
+                elif technique == 'Mode':
+                    mode_value = data[col].mode()[0]
+                    data[col].fillna(mode_value, inplace=True)
+    return data
+
+# Streamlit app
+st.title("Data Preprocessing and Model Training App")
+
+# Upload data
+st.subheader("Upload Data")
+uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
-
-    # Display the uploaded data
-    st.subheader("Uploaded Data:")
+    st.subheader('Your Data')
     st.write(data.head())
 
-    # Select target variable
-    target_column_name = st.sidebar.selectbox("Select the target column:", data.columns)
+    categorical_cols, numerical_cols, null_values = automate_preprocessing(data)
 
-    # Choose between classification and regression
-    problem_type = st.sidebar.radio("Select the problem type:", ["Classification", "Regression"])
+    st.subheader("Data Info")
+    st.write(f"Number of Rows: {data.shape[0]}")
+    st.write(f"Number of Columns: {data.shape[1]}")
+    st.write("Column Types:")
+    column_types = data.dtypes
+    st.write(column_types)
+    st.write("Missing Values:")
+    st.write(null_values)
+    st.subheader('Data Description')
+    st.write(data.describe())
 
-    # EDA
-    st.sidebar.header("Exploratory Data Analysis")
-    if st.sidebar.checkbox("Show EDA"):
-        st.subheader("Exploratory Data Analysis")
-        st.write(data.describe())
-        profile_df = data.profile_report()
-        st_profile_report(profile_df)
+    st.subheader("Choose Columns to Drop")
+    columns_to_drop = st.multiselect("Select columns to drop", data.columns)
+    if columns_to_drop:
+        data.drop(columns=columns_to_drop, inplace=True)
+
+    st.subheader("Column Selection")
+    target_col = st.selectbox("Select the Target Column", data.columns)
+    st.write(f"Target Column: {target_col}")
+
+    st.subheader("Data Transformation")
+    data = handle_missing_and_transform(data, categorical_cols, numerical_cols)
 
 
-    # Model Training
-    st.sidebar.header("Model Training")
-    if st.sidebar.checkbox("Train Model"):
-        st.subheader("Train Machine Learning Model")
 
-        # Perform PyCaret setup
-        if problem_type == "Classification":
-            setup(data, target=target_column_name, session_id=123)
+    st.subheader("Model Training and Evaluation")
+
+    # Detect task type (classification or regression)
+    if st.button('Run Modelling'): 
+        if data[target_col].dtype == 'object' or len(data[target_col].unique()) <= 2:
+            task_type = 'Classification'
+            st.write(f'This task is a {task_type} task')
+            from pycaret.classification import *
+            model = setup(data, target=target_col, train_size=0.7)
             setup_df = pull()
             st.dataframe(setup_df)
-
-
-        else:
-            setup(data, target=target_column_name, session_id=123, silent=True, data_split_shuffle=False)
-            setup_df = pull()
-            st.dataframe(setup_df)
-
-
-        if st.checkbox("Compare Models"):
-            best_model =compare_models()
+            best_model = compare_models()
             compare_df = pull()
             st.dataframe(compare_df)
             save_model(best_model, 'best_model')
 
-
-        # Allow user to choose models
-        available_models = models()
-        model_ids = available_models.index.tolist()
-        model_names = available_models['Name'].tolist()
-        selected_models_names = st.multiselect(
-            "Select machine learning models to use:",
-            model_names,
-            default=model_names[:2]  # Default selection (first two models)
-        )
-
-        # Get corresponding model IDs for selected model names
-        selected_models_ids = [model_id for model_id, model_name in zip(model_ids, model_names) if model_name in selected_models_names]
-
-        # Check if any new models have been added
-        new_models_ids = [model_id for model_id in selected_models_ids if model_id not in st.session_state.get('trained_models', [])]
-        st.session_state.trained_models = selected_models_ids
-
-        # Train and evaluate the selected models
-        for model_id, model_name in zip(new_models_ids, selected_models_names):
-            st.write(f"Training and evaluating {model_name}...")
-            model = create_model(model_id)
-            evaluate_model(model)
-            create_df = pull()
-            st.dataframe(create_df)
-
-    # Make Predictions
-    st.sidebar.header("Make Predictions")
-    if st.sidebar.checkbox("Make Predictions"):
-        st.subheader("Make Predictions")
-        # Upload a CSV file for predictions
-        uploaded_file = st.file_uploader("Upload a CSV file for predictions:", type=["csv"])
-        if uploaded_file is not None:
-            new_data = pd.read_csv(uploaded_file)
-            st.write("New data for predictions:")
-            st.write(new_data.head())
-            for model_id, model_name in zip(selected_models_ids, selected_models_names):
-                predictions = predict_model(model_id, data=new_data)
-                st.write(f"Predictions using {model_name} (Model ID: {model_id}):")
-                st.write(predictions)
-
-    # Save Model
-    st.sidebar.header("Save Model")
-    if st.sidebar.button("Save Model"):
-        final_model = create_model(selected_models_ids[0])  # Use the first selected model for saving
-        save_model(final_model, 'final_model')
-        st.write("Model saved as 'final_model.pkl'.")
-
-# Footer
-st.sidebar.write("By Saif Gamal")
+        else:
+            task_type = 'Regression'
+            st.write(f'This task is a {task_type} task')
+            from pycaret.regression import *
+            model = setup(data, target=target_col, train_size=0.7)
+            setup_df = pull()
+            st.dataframe(setup_df)
+            best_model = compare_models()
+            compare_df = pull()
+            st.dataframe(compare_df)
+            save_model(best_model, 'best_model')
