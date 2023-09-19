@@ -1,3 +1,12 @@
+!pip install pyngrok
+!pip install pandas-profiling
+!pip install streamlit-pandas-profiling
+!pip install pandas-profiling
+!pip install -q streamlit
+!pip install pycaret
+!pip install streamlit
+
+
 import streamlit as st
 import pandas as pd
 from pycaret.classification import *
@@ -98,4 +107,4 @@ if uploaded_file is not None:
             st.write("Model saved as 'final_model.pkl'.")
 
 # Footer
-st.sidebar.write("By OpenAI's GPT-3")
+st.sidebar.write("By Saif Gamal")
