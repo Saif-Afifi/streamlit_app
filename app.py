@@ -43,11 +43,22 @@ if uploaded_file is not None:
         # Perform PyCaret setup
         if problem_type == "Classification":
             setup(data, target=target_column_name, session_id=123)
+            setup_df = pull()
+            st.dataframe(setup_df)
+
+
         else:
             setup(data, target=target_column_name, session_id=123, silent=True, data_split_shuffle=False)
+            setup_df = pull()
+            st.dataframe(setup_df)
+
 
         if st.checkbox("Compare Models"):
-            compare_models()
+            best_model =compare_models()
+            compare_df = pull()
+            st.dataframe(compare_df)
+            save_model(best_model, 'best_model')
+
 
         # Allow user to choose models
         available_models = models()
@@ -71,6 +82,8 @@ if uploaded_file is not None:
             st.write(f"Training and evaluating {model_name}...")
             model = create_model(model_id)
             evaluate_model(model)
+            create_df = pull()
+            st.dataframe(create_df)
 
     # Make Predictions
     st.sidebar.header("Make Predictions")
