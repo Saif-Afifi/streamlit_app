@@ -1,12 +1,3 @@
-!pip install pyngrok
-!pip install pandas-profiling
-!pip install streamlit-pandas-profiling
-!pip install pandas-profiling
-!pip install -q streamlit
-!pip install pycaret
-!pip install streamlit
-
-
 import streamlit as st
 import pandas as pd
 from pycaret.classification import *
